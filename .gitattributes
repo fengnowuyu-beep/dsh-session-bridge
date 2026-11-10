@@ -1,0 +1,2 @@
+# Keep sources as exact bytes; tests and docs are read verbatim.
+* -text

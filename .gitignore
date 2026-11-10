@@ -1,0 +1,11 @@
+# Dependencies and local noise
+node_modules/
+coverage/
+*.log
+*.tmp
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

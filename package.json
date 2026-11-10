@@ -1,0 +1,49 @@
+{
+  "name": "dsh-session-bridge",
+  "version": "0.2.0",
+  "description": "跨会话发消息工具：session_send 可向任意会话投递文本、图片与附件（本机路径 / file:// / http(s) URL），图片在目标模型不支持视觉时自动降级为文件附件 · Cross-session messaging with attachments for DeepSeek Harness",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.2.0-rc.1"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "lib",
+    "tools",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check:host": "node tools/check-host.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "session",
+    "cross-session",
+    "message",
+    "attachment",
+    "image",
+    "url",
+    "session-send"
+  ],
+  "license": "MIT"
+}

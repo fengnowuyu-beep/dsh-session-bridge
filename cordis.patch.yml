@@ -1,0 +1,32 @@
+# dsh-session-bridge bundle patch
+#
+# Inserts one Host plugin row: the row registers the `session_send` tool and
+# nothing else (no HTTP routes, no client half, no background jobs).
+#
+# There is no target allowlist. Every ordinary session is addressable; the
+# optional fences below only bound *file access* and *URL downloads*:
+#
+#   allowFileRoots: []      -> no local-path restriction
+#   allowPrivateUrls: false -> refuse loopback / private IP-literal URLs
+#
+# Override this row's config from the profile's own cordis.patch.yml (same id)
+# when you want to tighten either one:
+#
+#   - id: session-bridge
+#     name: dsh-session-bridge
+#     config:
+#       allowFileRoots:
+#         - E:/Data/Project/DeepSeekHarness
+#       allowPrivateUrls: false
+#       sendMode: queue
+#
+- insert:
+    - id: session-bridge
+      name: 'dsh-session-bridge'
+      config:
+        # queue：目标空闲时开新回合、运行中时排队；steer：插入正在运行的回合。
+        sendMode: queue
+        # 空数组 = 不限制本机文件路径；需要限制时填允许的根目录。
+        allowFileRoots: []
+        # 默认拒绝 localhost / 127.0.0.1 / 内网 IP 字面量 URL。
+        allowPrivateUrls: false
