@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- 新增 `session_create`：按 cwd 或 workspaceId 新建空白会话，可设标题、provider/model、reasoningEffort。
+- 新增 `workspace_create`：默认递归创建目录并注册工作区，可设名称；已有工作区复用。
+- 模型与推理强度在创建前对照 `sessionController.modelCatalog()` 校验；未指定时沿用宿主默认。
+- 新增共享 `errors.js`、`services.js`、`session-tools.js` 与对应测试。
+- 宿主契约检查扩展到 20 项；真实桌面实例验证了工作区、会话创建和后续投递。
+
 ## 0.2.0
 
 - 移除目标会话白名单：任意普通会话都可作为 `sessionId`。

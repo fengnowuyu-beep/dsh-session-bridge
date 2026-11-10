@@ -29,10 +29,10 @@ function execFor(dir, signal = liveSignal()) {
   }
 }
 
-test('apply registers one tool with sessionId required and optional attachments', () => {
+test('apply registers session_send plus the create tools', () => {
   const host = createFakeHost()
-  assert.equal(host.registered.length, 1)
-  const tool = host.tool
+  assert.deepEqual(host.registered.map(tool => tool.name).sort(), ['session_create', 'session_send', 'workspace_create'])
+  const tool = host.tools.session_send
   assert.equal(tool.name, 'session_send')
   assert.deepEqual(tool.parameters.required, ['sessionId'])
   assert.equal(tool.parameters.properties.sessionId.type, 'string')

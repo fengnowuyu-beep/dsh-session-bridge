@@ -1,22 +1,27 @@
 # dsh-session-bridge
 
-给 DSH 增加一个跨会话发消息工具 `session_send`：把一条用户消息投递到**另一个 DSH 会话**，由宿主 `sessionController.prompt` 完成准入。
+给 DSH 增加三个 Host 工具：
 
-v0.2 起：
+- `session_send`：把用户消息投递到**另一个 DSH 会话**，由宿主 `sessionController.prompt` 完成准入；
+- `session_create`：**新建空白会话**，可指定工作区/目录、标题、模型与推理强度；
+- `workspace_create`：**新建或复用工作区**，可创建目录并命名。
+
+v0.3 起：
 
 - **没有目标白名单**——任何普通会话都可以指定；
-- 不只发文本，还可以带**图片和附件**；
-- 附件支持**本机文件路径、`file://` URL、http(s) URL**；
-- 图片作为图片内容发送；目标模型不支持视觉时，**自动降级为文件附件**。
+- 不只发文本，还可以带**图片和附件**；附件支持**本机文件路径、`file://` URL、http(s) URL**；
+- 图片作为图片内容发送；目标模型不支持视觉时，**自动降级为文件附件**；
+- 新建会话时可以显式指定 `provider` + `model` + `reasoningEffort`；都不传则沿用宿主默认；
+- 新建工作区默认会递归创建目录，也可以要求目录必须已存在。
 
 它适合这些场景：
 
 - 让一个会话把结论、提醒或交接内容发给另一个正在等待的会话；
 - 从一个"调度"会话把任务分派给多个已经存在的会话；
 - 把本机图片、报告、日志或下载到的文件投递给另一个会话；
-- 在不打开目标会话的情况下，往目标会话的收件队列里放一条消息。
+- 用代码/工具链批量开新会话、新工作区，而不是手点 UI。
 
-它**不会**创建会话、不会修改目标会话的历史、不会伪造助手消息。投递成功只代表宿主已受理并放进目标会话的队列，**不代表目标已经回答**。
+它**不会**修改已有会话的历史、不会伪造助手消息。`session_send` 投递成功只代表宿主已受理并放进目标会话的队列，**不代表目标已经回答**。
 
 ---
 
@@ -27,9 +32,12 @@ dsh-session-bridge/
 ├─ package.json             # DSH bundle 清单
 ├─ cordis.patch.yml         # 向 profile 插入 session-bridge 行
 ├─ lib/
-│  ├─ index.js              # 插件入口：注册 session_send
+│  ├─ index.js              # 插件入口：注册三个工具
+│  ├─ session-tools.js      # session_create / workspace_create
+│  ├─ errors.js             # 共享错误类型
+│  ├─ services.js           # 可选 Host 服务解析
 │  ├─ config.js             # 配置归一化
-│  └─ attachments.js        # 本机/URL 附件、图片识别、文件上传
+│  └─ attachments.js        # 本机/URL 附件、图片识别、流式上传
 ├─ test/                    # 零依赖离线测试（node:test）
 ├─ test-support/
 │  └─ fake-host.mjs         # 假 Host / controller / fileUploads / fetch
@@ -160,6 +168,31 @@ dsh-session-bridge/
 }
 ```
 
+```json
+{
+  "name": "session_create",
+  "parameters": {
+    "cwd": "string（可选；绝对路径，与 workspaceId 二选一）",
+    "workspaceId": "string（可选；与 cwd 二选一）",
+    "title": "string（可选）",
+    "provider": "string（可选；必须与 model 同时提供）",
+    "model": "string（可选；必须与 provider 同时提供）",
+    "reasoningEffort": "string（可选）"
+  }
+}
+```
+
+```json
+{
+  "name": "workspace_create",
+  "parameters": {
+    "path": "string（必填；绝对目录）",
+    "title": "string（可选）",
+    "createDirectory": "boolean（可选；默认 true）"
+  }
+}
+```
+
 ### 4.2 只发文本
 
 ```json
@@ -273,6 +306,45 @@ fileUploads.uploadStream({
 
 ---
 
+### 4.8 新建会话
+
+```json
+{
+  "workspaceId": "5e0d206a-9c0d-412f-bd7f-7ce7e65f8b50",
+  "title": "跨会话创建测试会话",
+  "provider": "deepseek-account",
+  "model": "deepseek-flash",
+  "reasoningEffort": "max"
+}
+```
+
+- `cwd` 与 `workspaceId` 只能给一个；两个都不给时用宿主默认目录；
+- `provider` 与 `model` 必须成对出现；只给 `reasoningEffort` 时使用宿主模型目录里的默认模型；
+- 三个模型参数都不给时，使用宿主默认模型，不改变会话选择；
+- 模型 ID 和推理强度会在**创建前**对照 `modelCatalog()` 校验；未知值直接报错并列出可用项，不会留下配置错误的空会话；
+- `title` 会调用 `rename`；失败时错误里带已创建的 `sessionId`；
+- 返回 `{ created, sessionId, workspaceId, cwd, title, provider, model, reasoningEffort }`。
+
+注意：`session_create` 只创建空白会话，不发消息；标题通常要等第一条消息后才会自动生成，除非显式传 `title`。
+
+### 4.9 新建工作区
+
+```json
+{
+  "path": "C:/Users/Kaede/AppData/Local/Temp/dsh-shots/bridge-workspace-test",
+  "title": "跨会话测试工作区",
+  "createDirectory": true
+}
+```
+
+- `path` 必须是绝对路径；`createDirectory` 默认 `true`，会递归创建缺失目录；
+- 同一目录已有工作区时复用，返回 `created: false`；
+- `title` 会重命名工作区；不传则使用目录名；
+- 工作区注册不会删除目录、文件或会话；删除工作区请在 UI 里操作；
+- 依赖宿主 `workspaceController`；桌面 / Web 组合默认有，headless 组合可能没有。
+
+---
+
 ## 5. 安全模型与风险
 
 v0.2 **移除了目标白名单**。这意味着：
@@ -284,6 +356,8 @@ v0.2 **移除了目标白名单**。这意味着：
 5. **模式由运维决定。** 模型不能把 `queue` 改成 `steer`，`sendMode` 只读配置。
 6. **没有插件级固定上限。** 附件数量、总字节数、文本长度都不在插件里设死；文件流式处理，URL 下载到临时文件，发送后删除。真实限制来自宿主（图片规范化限额、模型上下文）和磁盘/网络。
 7. **有记录。** 每次成功准入写一行 Host 日志：`session-bridge: delivered <requestId> to <sessionId> (...)`。
+8. **工作区会写文件系统。** `workspace_create` 在 `createDirectory` 为 true 时会在任意绝对路径下递归建目录；这是比发消息更强的写操作。只让模型处理可信路径。
+9. **新建会话会消耗资源。** 空会话本身不贵，但随后投递消息会启动模型回合；显式指定模型/强度时请确认目标模型 ID。
 
 仍然需要注意：向正在运行的会话 `steer` 会打断它当前的步骤；向空闲会话发送会**唤醒**它并消耗模型额度。
 
@@ -298,7 +372,9 @@ cd E:\Data\Project\DeepSeekHarness\DSH-Homemade-Plugins\dsh-session-bridge
 node --test
 ```
 
-覆盖：配置归一化、无白名单目标、文本/附件至少一个、本机路径、相对路径、`allowFileRoots`、`file://`、http(s) 下载、重定向、无数量上限、内网 URL 拒绝、图片魔数识别、图片流式上传、普通文件上传 receipt、文本+图片+文件顺序、图片降级、降级时复用已上传文件、`fileUploads` 缺失、`accepted:false`、AbortSignal、`enabled:false`、输出文案。
+结果：**68 / 68 通过**。
+
+覆盖：配置归一化、无白名单目标、文本/附件至少一个、本机路径、相对路径、`allowFileRoots`、`file://`、http(s) 下载、重定向、无数量上限、内网 URL 拒绝、图片魔数识别、图片流式上传、普通文件上传 receipt、文本+图片+文件顺序、图片降级、降级时复用已上传文件、`fileUploads` 缺失、`accepted:false`、AbortSignal、`enabled:false`、输出文案；以及 `session_create` 的 cwd/workspaceId 二选一、标题、模型/强度校验与失败路径，`workspace_create` 的建目录、复用、改名与失败路径。
 
 ### 6.2 宿主契约检查（读取已安装的 app.asar）
 
@@ -309,26 +385,39 @@ node tools/check-host.mjs
 它会直接读 `D:\Software\DeepSeek Harness\resources\app.asar`，核对：
 
 - `sessionController` 服务名、`prompt(request, signal)`、`queue` / `steer` 分支、`list`；
+- `sessionController.create` / `selectModel` / `rename` / `modelCatalog`；
 - `hasPromptContent`、文件 receipt 解析；
-- `fileUploads` 服务名、`uploadStream` / `uploadImageStream`。
+- `fileUploads` 服务名、`uploadStream` / `uploadImageStream`；
+- `workspaceController` 服务名、`create` / `rename`、`workspaceRegistry.create(request.path)`。
 
-如果 DSH 升级后这里失败，先别发消息，按报错项核对新版 API。
+结果：**20 / 20 通过**。如果 DSH 升级后这里失败，先别发消息，按报错项核对新版 API。
 
 ### 6.3 真机验证（安装并重启后）
 
-1. 新建一个空白测试会话，复制它的 `session-...` ID。
-2. 打开另一个会话，对助手说：
-   「用 session_send 给 `session-...` 发一条：跨会话测试」。
-3. 再准备一张小图片和一个文本文件，分别试：
-   「把 `C:/path/pixel.png` 和 `C:/path/notes.txt` 用 session_send 发给 `session-...`，文字写：附件测试」。
-4. 预期：
+1. 用 `workspace_create` 建一个临时工作区（也可在 UI 里先建）。
+2. 用 `session_create` 在该工作区建会话，例如：
+   ```json
+   {
+     "workspaceId": "<上一步的 workspaceId>",
+     "title": "跨会话创建测试会话",
+     "provider": "deepseek-account",
+     "model": "deepseek-flash",
+     "reasoningEffort": "max"
+   }
+   ```
+   预期返回 `created: true` 和新 `sessionId`，侧栏出现对应工作区/会话。
+3. 打开另一个会话，对助手说：
+   「用 session_send 给 `<sessionId>` 发一条：跨会话测试」。
+4. 再准备一张小图片和一个文本文件，分别试：
+   「把 `C:/path/pixel.png` 和 `C:/path/notes.txt` 用 session_send 发给 `<sessionId>`，文字写：附件测试」。
+5. 预期：
    - 工具返回 `sent: true`；
    - 目标测试会话里出现一条**用户消息**，图片可预览，文件显示为附件/只读路径；
    - 如果目标空闲，它会开始一个新回合（会消耗模型额度）；
    - 如果目标模型不支持图片，结果里 `imageFallback: true`，图片以文件附件出现。
-5. 若配置了 `allowFileRoots`，再试一个根目录外的文件，预期报 `file-outside-roots`，目标会话没有新消息。
+6. 若配置了 `allowFileRoots`，再试一个根目录外的文件，预期报 `file-outside-roots`，目标会话没有新消息。
 
-本仓库的隔离实例验证记录见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
+本仓库的真实桌面验证记录见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
 
 ---
 
@@ -354,5 +443,6 @@ node tools/check-host.mjs
 
 ## 9. 版本
 
-- `0.2.0`：移除目标白名单；支持本机路径、`file://`、http(s) URL 附件；图片内联 + 普通文件 receipt；目标模型不支持图片时自动降级；新增 `allowFileRoots` / `allowPrivateUrls`。
+- `0.3.0`：新增 `session_create`（cwd/workspaceId、标题、provider/model/reasoningEffort）和 `workspace_create`（建目录、注册、改名）；模型/强度在创建前校验；补齐离线测试与真实桌面验证。
+- `0.2.0`：移除目标白名单；支持本机路径、`file://`、http(s) URL 附件；图片流式上传 + 普通文件 receipt；目标模型不支持图片时自动降级；新增 `allowFileRoots` / `allowPrivateUrls`；移除插件级附件/文本上限。
 - `0.1.0`：首个版本。`session_send` + 精确白名单 + `queue`/`steer` + 离线测试 + 宿主契约检查。

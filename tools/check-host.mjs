@@ -94,6 +94,16 @@ const uploadVersion = uploadPackageEntry === undefined
   ? '未知'
   : JSON.parse(readEntry(archive, uploadPackageEntry, archiveInfo.dataOffset)).version
 
+const WORKSPACE_PREFIX = 'dsh/node_modules/@deepseek-ai/dsh-api-workspace-controller'
+const workspaceEntry = findEntry(archiveInfo.header, `${WORKSPACE_PREFIX}/lib/index.js`)
+const workspacePackageEntry = findEntry(archiveInfo.header, `${WORKSPACE_PREFIX}/package.json`)
+const workspaceSource = workspaceEntry === undefined
+  ? ''
+  : readEntry(archive, workspaceEntry, archiveInfo.dataOffset)
+const workspaceVersion = workspacePackageEntry === undefined
+  ? '未知'
+  : JSON.parse(readEntry(archive, workspacePackageEntry, archiveInfo.dataOffset)).version
+
 const checks = [
   { source, label: '服务名 sessionController', pattern: /super\(ctx, ["']sessionController["']/u },
   { source, label: 'prompt(request, signal) 对外入口', pattern: /async prompt\(request, signal\)\s*\{/u },
@@ -104,14 +114,23 @@ const checks = [
   { source, label: 'list(_request, signal) 返回 items', pattern: /async list\(_request, signal\)[\s\S]{0,400}?items:\s*\(await this\.listState\.list\(signal\)\)/u },
   { source, label: 'hasPromptContent 接受非文本内容', pattern: /function hasPromptContent\(content\)\s*\{/u },
   { source, label: 'file 内容按 receipt 解析', pattern: /part\.type !== ["']file["'][\s\S]{0,300}?staged\(part\.receiptId\)/u },
+  { source, label: 'sessionController.create(request)', pattern: /create\(request\)\s*\{\s*return this\.commands\.create\(request\)/u },
+  { source, label: 'sessionController.selectModel(request)', pattern: /selectModel\(request\)\s*\{\s*return this\.commands\.selectModel\(request\)/u },
+  { source, label: 'sessionController.rename(request)', pattern: /rename\(request\)\s*\{\s*return this\.commands\.rename\(request\)/u },
+  { source, label: 'sessionController.modelCatalog()', pattern: /modelCatalog\(\)\s*\{\s*return buildModelCatalog\(this\.ctx\)/u },
   { source: uploadSource, label: '服务名 fileUploads', pattern: /super\(ctx, ["']fileUploads["']\)/u },
   { source: uploadSource, label: 'fileUploads.uploadStream(request)', pattern: /async uploadStream\(request\)\s*\{/u },
-  { source: uploadSource, label: 'fileUploads.uploadImageStream(request)', pattern: /async uploadImageStream\(request\)\s*\{/u }
+  { source: uploadSource, label: 'fileUploads.uploadImageStream(request)', pattern: /async uploadImageStream\(request\)\s*\{/u },
+  { source: workspaceSource, label: '服务名 workspaceController', pattern: /super\(ctx, ["']workspaceController["']/u },
+  { source: workspaceSource, label: 'workspaceController.create(request)', pattern: /create\(request\)\s*\{\s*return this\.commands\.create\(request\)/u },
+  { source: workspaceSource, label: 'workspaceController.rename(request)', pattern: /rename\(request\)\s*\{\s*return this\.commands\.rename\(request\)/u },
+  { source: workspaceSource, label: 'registry.create(request.path)', pattern: /workspaceRegistry\.create\(request\.path\)/u }
 ]
 
 process.stdout.write(`app.asar: ${archive}\n`)
 process.stdout.write(`会话控制器版本: ${version}\n`)
 process.stdout.write(`文件上传服务版本: ${uploadVersion}\n`)
+process.stdout.write(`工作区控制器版本: ${workspaceVersion}\n`)
 let failed = 0
 for (const check of checks) {
   if (check.pattern.test(check.source)) {

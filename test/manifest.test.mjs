@@ -27,9 +27,12 @@ test('the bundle patch inserts the documented row without a target allowlist', (
   assert.doesNotMatch(patch, /allowedSessionIds/u)
 })
 
-test('README documents the new config and attachment surface', () => {
+test('README documents the new config and tool surface', () => {
   const readme = read('README.md')
-  for (const key of ['allowFileRoots', 'allowPrivateUrls', 'sendMode', 'enabled', 'attachments', 'imageFallback']) {
+  for (const key of [
+    'allowFileRoots', 'allowPrivateUrls', 'sendMode', 'enabled',
+    'attachments', 'imageFallback', 'session_create', 'workspace_create', 'reasoningEffort'
+  ]) {
     assert.match(readme, new RegExp(key, 'u'))
   }
   assert.match(readme, /session_send/u)
