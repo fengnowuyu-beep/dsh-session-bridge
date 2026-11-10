@@ -2,7 +2,7 @@
 
 - 日期：2026-11-11
 - 环境：Windows，Node.js v24.15.0，DeepSeek Harness `0.2.2-rc.1`
-- 插件版本：`0.3.1`
+- 插件版本：`0.3.2`
 
 ## 1. 离线测试
 
@@ -11,7 +11,7 @@ cd dsh-session-bridge
 node --test
 ```
 
-结果：**69 / 69 通过**。
+结果：**70 / 70 通过**。
 
 覆盖范围：
 
@@ -20,7 +20,7 @@ node --test
 - 无附件数量/总字节/文本长度上限、内网 URL 拒绝；
 - 图片魔数识别、图片流式上传、普通文件流式上传 receipt、文本+图片+文件顺序；
 - 图片降级、降级时复用已上传文件、`fileUploads` 缺失；
-- `session_create`：cwd / workspaceId 二选一、cwd 命中已注册工作区时挂载、标题、provider/model/reasoningEffort 校验、未知模型/强度、创建/选模型/改名失败；
+- `session_create`：cwd / workspaceId 二选一、cwd 命中已注册工作区时挂载、标题、provider/model/reasoningEffort 校验、**模型选择只改会话不改默认模型**、未知模型/强度、创建/选模型/改名失败；
 - `workspace_create`：建目录、复用、改名、缺服务、创建失败；
 - `accepted:false`、AbortSignal、`enabled:false`、输出文案。
 
@@ -40,9 +40,11 @@ node tools/check-host.mjs
 - `@deepseek-ai/dsh-api-workspace-controller`：`workspaceController` 服务名、
   `create`、`rename`、`workspaceRegistry.create(request.path)`；
 - `@deepseek-ai/dsh-workspace`：`workspaceRegistry.resolveByPath(path)`、
-  `Workspace.attachSession(sessionId)`。
+  `Workspace.attachSession(sessionId)`；
+- `@deepseek-ai/dsh-agent`：`AgentModel.select(selection)`、会话级
+  `model/selection` 事件。
 
-结果：**22 / 22 通过**（相关包版本均为 `0.2.2-rc.1`）。
+结果：**25 / 25 通过**（相关包版本均为 `0.2.2-rc.1`）。
 
 ## 3. 隔离实例附件链路（0.2）
 
@@ -161,6 +163,25 @@ path C:\Users\Kaede\AppData\Local\Temp\dsh-shots\bridge-workspace-test
 
 再通过 `session_send` 投递「只回复 OK」后，DSH 侧栏的「问答助手」下实际出现了「入口修复测试」；`workspace.json` 的该工作区 `sessionIds` 也包含 `session-2da12109-...`。
 
+### 5.3 模型/推理强度默认值隔离
+
+`sessionController.selectModel` 不只是改会话：它还会调用 `agentDefaultModel.saveSelection(selected)`，把同一选择写成 profile 默认值。插件旧实现调用了它，所以会给用户“默认模型被改掉”的观感。
+
+修复后不再调用 `selectModel`：
+
+1. 通过 `agents.get(sessionId)` 或 `sessionController.resolveAgent(sessionId)` 取到会话 Agent；
+2. 用 `llm.resolveCallConfig(selection)` 校验；
+3. 调用 `agent.model.select(selection)`，只追加会话级 `model/selection` 事件；
+4. 不调用 `agentDefaultModel.saveSelection`。
+
+实测：
+
+- 创建 `session-7c37f497-bf21-4c03-89d0-5cc1eab9f445`（`deepseek-account/deepseek-v4-pro` + `high`）后，该会话输入框显示 `DeepSeek-V4-Pro High`；
+- 同时新开一个空白对话，输入框仍显示默认 `DeepSeek-V4.1-Flash Max`；
+- 用临时探针读取 `agentDefaultModel.currentSelection()` 也是 `deepseek-account/deepseek-flash max`。
+
+结论：模型/推理强度现在**只影响指定会话**，profile 默认值不变。
+
 ## 6. 当前保留的测试对象
 
 - 工作区「跨会话测试工作区」
@@ -168,6 +189,7 @@ path C:\Users\Kaede\AppData\Local\Temp\dsh-shots\bridge-workspace-test
 - 会话「Pro/High 模型测试」
 - 会话「跨会话发送测试目标会话」
 - 问答助手工作区下的会话「入口修复测试」
+- 问答助手工作区下的会话「会话级模型修复测试2」（`session-7c37f497...`）
 - 旧的无工作区归属会话「能力测试：专家团与子代理」（`session-f85bb888...`，修复前创建）
 
 它们保留在侧栏方便复查；不需要时可在 DSH UI 中删除。临时目录 `%TEMP%\dsh-shots\bridge-workspace-test` 可随工作区一起清理。

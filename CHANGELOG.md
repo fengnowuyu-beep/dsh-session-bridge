@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- 修复 `session_create` 的模型/推理强度会改动 profile 默认模型的问题：不再调用会 `saveSelection` 的 `sessionController.selectModel`，改为取会话 Agent 后调用 `agent.model.select()`，只写当前会话的 `model/selection` 事件。
+- 实测：Pro/High 新会话显示 `DeepSeek-V4-Pro High`，同时新开会话仍显示默认 `DeepSeek-V4.1-Flash Max`。
+- 离线测试增至 70 项；宿主契约检查增至 25 项（`resolveAgent`、`AgentModel.select`、`model/selection`）。
+
 ## 0.3.1
 
 - 修复 `session_create` 只传 `cwd` 时不挂载工作区的问题：先用 `workspaceRegistry.resolveByPath(cwd)` 找到已注册工作区，再以 `workspaceId` 创建会话，使新会话立即出现在对应工作区/侧栏。

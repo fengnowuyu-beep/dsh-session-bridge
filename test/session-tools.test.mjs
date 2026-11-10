@@ -70,8 +70,17 @@ test('session_create validates and applies provider, model, and reasoning effort
     model: 'deepseek-v4-pro',
     reasoningEffort: 'medium'
   }, { signal: liveSignal() })
-  assert.deepEqual(host.selections, [{
+  assert.deepEqual(host.agentSelections, [{
     sessionId: 'session-created-1',
+    selection: {
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-pro',
+      reasoningEffort: 'medium'
+    }
+  }])
+  // The session-local path must never call the default-saving remote.
+  assert.equal(host.selections.length, 0)
+  assert.deepEqual(host.llmCalls, [{
     provider: 'deepseek-official',
     model: 'deepseek-v4-pro',
     reasoningEffort: 'medium'
@@ -84,12 +93,15 @@ test('session_create validates and applies provider, model, and reasoning effort
 test('reasoningEffort alone uses the catalog default model', async () => {
   const host = createFakeHost()
   const result = await callNamedTool(host, 'session_create', { reasoningEffort: 'max' }, { signal: liveSignal() })
-  assert.deepEqual(host.selections, [{
+  assert.deepEqual(host.agentSelections, [{
     sessionId: 'session-created-1',
-    provider: 'deepseek-official',
-    model: 'deepseek-flash',
-    reasoningEffort: 'max'
+    selection: {
+      provider: 'deepseek-official',
+      model: 'deepseek-flash',
+      reasoningEffort: 'max'
+    }
   }])
+  assert.equal(host.selections.length, 0)
   assert.equal(result.provider, 'deepseek-official')
   assert.equal(result.model, 'deepseek-flash')
   assert.equal(result.reasoningEffort, 'max')
@@ -127,7 +139,7 @@ test('a session creation failure is wrapped', async () => {
 })
 
 test('a model selection failure reports the already-created session id', async () => {
-  const host = createFakeHost({ selectError: new Error('provider unavailable') })
+  const host = createFakeHost({ llmError: new Error('provider unavailable') })
   await assert.rejects(
     () => callNamedTool(host, 'session_create', {
       provider: 'deepseek-official', model: 'deepseek-flash'
@@ -139,6 +151,22 @@ test('a model selection failure reports the already-created session id', async (
     }
   )
   assert.equal(host.created.length, 1)
+  assert.equal(host.agentSelections.length, 0)
+})
+
+test('a resolveAgent failure reports the already-created session id and leaves the default alone', async () => {
+  const host = createFakeHost({ resolveAgentError: new Error('agent missing') })
+  await assert.rejects(
+    () => callNamedTool(host, 'session_create', {
+      provider: 'deepseek-official', model: 'deepseek-flash'
+    }, { signal: liveSignal() }),
+    error => {
+      assert.equal(error.code, 'model-selection-failed')
+      assert.match(error.message, /session-created-1/u)
+      return true
+    }
+  )
+  assert.equal(host.selections.length, 0)
 })
 
 test('a rename failure reports the already-created session id', async () => {

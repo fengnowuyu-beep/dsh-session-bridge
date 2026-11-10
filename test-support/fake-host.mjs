@@ -44,6 +44,7 @@ export function createFakeController(options = {}) {
   const created = []
   const selections = []
   const renames = []
+  const agentSelections = []
   let call = 0
   let nextSession = 1
   const controller = {
@@ -69,13 +70,24 @@ export function createFakeController(options = {}) {
       if (options.selectError !== undefined) throw options.selectError
       return { selected: { ...request } }
     },
+    async resolveAgent(sessionId) {
+      if (options.resolveAgentError !== undefined) throw options.resolveAgentError
+      return {
+        session: { id: sessionId },
+        model: {
+          select(selection) {
+            agentSelections.push({ sessionId, selection })
+          }
+        }
+      }
+    },
     async rename(request) {
       renames.push(request)
       if (options.renameError !== undefined) throw options.renameError
       return { title: request.title, seq: 1 }
     }
   }
-  return { controller, prompts, created, selections, renames }
+  return { controller, prompts, created, selections, renames, agentSelections }
 }
 
 /**
@@ -197,6 +209,15 @@ export function createFakeHost(options = {}) {
   const workspaceRegistry = options.workspaceRegistry
     ?? createFakeWorkspaceRegistry(options.workspacesByPath ?? {})
 
+  const llmCalls = []
+  const llm = options.llm ?? {
+    async resolveCallConfig(selection) {
+      llmCalls.push(selection)
+      if (options.llmError !== undefined) throw options.llmError
+      return selection
+    }
+  }
+
   const fetchCalls = []
   const fetchImpl = options.fetchImpl ?? (async (url) => {
     fetchCalls.push(String(url))
@@ -220,6 +241,7 @@ export function createFakeHost(options = {}) {
     ...options.omitFileUploads === true ? {} : { fileUploads },
     ...options.omitWorkspaceController === true ? {} : { workspaceController },
     ...options.omitWorkspaceRegistry === true ? {} : { workspaceRegistry },
+    ...options.omitLlm === true ? {} : { llm },
     fetch: fetchImpl
   }
   apply(ctx, options.config)
@@ -237,6 +259,8 @@ export function createFakeHost(options = {}) {
     created,
     selections,
     renames: sessionRenames,
+    agentSelections: createdController?.agentSelections ?? [],
+    llmCalls,
     workspaces,
     workspaceRenames,
     workspaceRegistry
