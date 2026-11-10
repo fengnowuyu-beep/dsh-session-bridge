@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-bridge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "跨会话会话工具：session_send 投递文本/图片/附件，session_create 新建会话并指定模型与推理强度，workspace_create 新建工作区 · Cross-session messaging and session/workspace creation for DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",

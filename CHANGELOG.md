@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- 修复 `session_create` 只传 `cwd` 时不挂载工作区的问题：先用 `workspaceRegistry.resolveByPath(cwd)` 找到已注册工作区，再以 `workspaceId` 创建会话，使新会话立即出现在对应工作区/侧栏。
+- 新增 `cwd` 命中已注册工作区的测试；宿主契约检查增加 `workspaceRegistry.resolveByPath` 与 `Workspace.attachSession`，共 22 项。
+
 ## 0.3.0
 
 - 新增 `session_create`：按 cwd 或 workspaceId 新建空白会话，可设标题、provider/model、reasoningEffort。

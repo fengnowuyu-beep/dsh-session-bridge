@@ -2,7 +2,7 @@
 
 - 日期：2026-11-11
 - 环境：Windows，Node.js v24.15.0，DeepSeek Harness `0.2.2-rc.1`
-- 插件版本：`0.3.0`
+- 插件版本：`0.3.1`
 
 ## 1. 离线测试
 
@@ -11,7 +11,7 @@ cd dsh-session-bridge
 node --test
 ```
 
-结果：**68 / 68 通过**。
+结果：**69 / 69 通过**。
 
 覆盖范围：
 
@@ -20,7 +20,7 @@ node --test
 - 无附件数量/总字节/文本长度上限、内网 URL 拒绝；
 - 图片魔数识别、图片流式上传、普通文件流式上传 receipt、文本+图片+文件顺序；
 - 图片降级、降级时复用已上传文件、`fileUploads` 缺失；
-- `session_create`：cwd / workspaceId 二选一、标题、provider/model/reasoningEffort 校验、未知模型/强度、创建/选模型/改名失败；
+- `session_create`：cwd / workspaceId 二选一、cwd 命中已注册工作区时挂载、标题、provider/model/reasoningEffort 校验、未知模型/强度、创建/选模型/改名失败；
 - `workspace_create`：建目录、复用、改名、缺服务、创建失败；
 - `accepted:false`、AbortSignal、`enabled:false`、输出文案。
 
@@ -38,9 +38,11 @@ node tools/check-host.mjs
 - `@deepseek-ai/dsh-client-file-upload`：`fileUploads` 服务名、
   `uploadStream`、`uploadImageStream`；
 - `@deepseek-ai/dsh-api-workspace-controller`：`workspaceController` 服务名、
-  `create`、`rename`、`workspaceRegistry.create(request.path)`。
+  `create`、`rename`、`workspaceRegistry.create(request.path)`；
+- `@deepseek-ai/dsh-workspace`：`workspaceRegistry.resolveByPath(path)`、
+  `Workspace.attachSession(sessionId)`。
 
-结果：**20 / 20 通过**（三个包版本均为 `0.2.2-rc.1`）。
+结果：**22 / 22 通过**（相关包版本均为 `0.2.2-rc.1`）。
 
 ## 3. 隔离实例附件链路（0.2）
 
@@ -125,10 +127,47 @@ path C:\Users\Kaede\AppData\Local\Temp\dsh-shots\bridge-workspace-test
 
 目标会话 `session-342e6e4b-027a-4e12-a580-973212931faf` 接收了文本 + `pixel.png` + `notes.txt`；目标助手读取了文件只读路径、校验 sha256，并在对话里确认「文本 + 图片 + 普通文件三种载荷均能跨会话正常送达」。
 
-## 5. 当前保留的测试对象
+## 5. HMR 与 cwd 工作区挂载修复
+
+### 5.1 HMR 热替换
+
+不重启 DSH，临时把 `workspace_create` 返回文案加上 `[HMR] `，等待约 5 秒后调用同一已存在工作区，返回立刻带 `[HMR]`；`git restore` 恢复源码后再调用，返回恢复原样。结论：正常 `lib/*.js` 修改会由 HMR 热替换，不需要重启。
+
+### 5.2 IM 测试暴露的问题与修复
+
+`dsh-im-session-b081d597...` 里的测试用：
+
+```json
+{"cwd": "E:\\Data\\Project\\DeepSeekHarness\\问答助手", "title": "能力测试：专家团与子代理"}
+```
+
+调用了 `session_create`。宿主 `sessionController.create` 只在收到 `workspaceId` 时才执行 `workspace.attachSession`；只给 `cwd` 会创建会话，但不会加入工作区的 `sessionIds`，所以侧栏看不见。该次创建的 `session-f85bb888-e675-4ebf-8730-49656949ed40` 即为未挂载的旧会话。
+
+修复后，`session_create` 会先用 `workspaceRegistry.resolveByPath(cwd)` 找到已注册工作区，再以 `workspaceId` 创建。实测：
+
+```json
+{
+  "cwd": "E:\\Data\\Project\\DeepSeekHarness\\问答助手",
+  "title": "入口修复测试"
+}
+```
+
+返回：
+
+```text
+已创建会话 session-2da12109-3752-4068-99eb-a5135b1163f2
+工作区：68777dec-6460-42c0-95fa-0b20214a26c0
+```
+
+再通过 `session_send` 投递「只回复 OK」后，DSH 侧栏的「问答助手」下实际出现了「入口修复测试」；`workspace.json` 的该工作区 `sessionIds` 也包含 `session-2da12109-...`。
+
+## 6. 当前保留的测试对象
 
 - 工作区「跨会话测试工作区」
 - 会话「跨会话创建测试会话」
+- 会话「Pro/High 模型测试」
 - 会话「跨会话发送测试目标会话」
+- 问答助手工作区下的会话「入口修复测试」
+- 旧的无工作区归属会话「能力测试：专家团与子代理」（`session-f85bb888...`，修复前创建）
 
 它们保留在侧栏方便复查；不需要时可在 DSH UI 中删除。临时目录 `%TEMP%\dsh-shots\bridge-workspace-test` 可随工作区一起清理。

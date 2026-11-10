@@ -45,6 +45,17 @@ test('session_create accepts an absolute cwd or a workspaceId, but not both', as
   assert.equal(host.created.length, 2)
 })
 
+test('a cwd matching a registered workspace is attached through workspaceId', async (t) => {
+  const dir = await tempDir(t)
+  const host = createFakeHost({
+    workspacesByPath: { [dir]: { id: 'workspace-registered', path: dir } }
+  })
+  const result = await callNamedTool(host, 'session_create', { cwd: dir, title: '已挂到工作区' }, { signal: liveSignal() })
+  assert.deepEqual(host.created, [{ workspaceId: 'workspace-registered' }])
+  assert.equal(result.workspaceId, 'workspace-registered')
+  assert.equal(result.cwd, dir)
+})
+
 test('session_create can rename the new session', async () => {
   const host = createFakeHost()
   const result = await callNamedTool(host, 'session_create', { title: '  测试会话  ' }, { signal: liveSignal() })

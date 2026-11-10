@@ -319,6 +319,7 @@ fileUploads.uploadStream({
 ```
 
 - `cwd` 与 `workspaceId` 只能给一个；两个都不给时用宿主默认目录；
+- 只给 `cwd` 时，插件会先用 `workspaceRegistry.resolveByPath(cwd)` 找已注册工作区：命中则以 `workspaceId` 创建，**新会话会立即挂到该工作区**；没有命中则按普通 cwd 创建（可能不在任何工作区列表里，需要先 `workspace_create`）；
 - `provider` 与 `model` 必须成对出现；只给 `reasoningEffort` 时使用宿主模型目录里的默认模型；
 - 三个模型参数都不给时，使用宿主默认模型，不改变会话选择；
 - 模型 ID 和推理强度会在**创建前**对照 `modelCatalog()` 校验；未知值直接报错并列出可用项，不会留下配置错误的空会话；
@@ -372,7 +373,7 @@ cd E:\Data\Project\DeepSeekHarness\DSH-Homemade-Plugins\dsh-session-bridge
 node --test
 ```
 
-结果：**68 / 68 通过**。
+结果：**69 / 69 通过**。
 
 覆盖：配置归一化、无白名单目标、文本/附件至少一个、本机路径、相对路径、`allowFileRoots`、`file://`、http(s) 下载、重定向、无数量上限、内网 URL 拒绝、图片魔数识别、图片流式上传、普通文件上传 receipt、文本+图片+文件顺序、图片降级、降级时复用已上传文件、`fileUploads` 缺失、`accepted:false`、AbortSignal、`enabled:false`、输出文案；以及 `session_create` 的 cwd/workspaceId 二选一、标题、模型/强度校验与失败路径，`workspace_create` 的建目录、复用、改名与失败路径。
 
@@ -388,9 +389,10 @@ node tools/check-host.mjs
 - `sessionController.create` / `selectModel` / `rename` / `modelCatalog`；
 - `hasPromptContent`、文件 receipt 解析；
 - `fileUploads` 服务名、`uploadStream` / `uploadImageStream`；
-- `workspaceController` 服务名、`create` / `rename`、`workspaceRegistry.create(request.path)`。
+- `workspaceController` 服务名、`create` / `rename`、`workspaceRegistry.create(request.path)`；
+- `workspaceRegistry.resolveByPath(path)`、`Workspace.attachSession(sessionId)`。
 
-结果：**20 / 20 通过**。如果 DSH 升级后这里失败，先别发消息，按报错项核对新版 API。
+结果：**22 / 22 通过**。如果 DSH 升级后这里失败，先别发消息，按报错项核对新版 API。
 
 ### 6.3 真机验证（安装并重启后）
 
@@ -443,6 +445,7 @@ node tools/check-host.mjs
 
 ## 9. 版本
 
+- `0.3.1`：修复 `session_create` 只给 cwd 时新会话不挂到已注册工作区的问题（先解析 `workspaceRegistry.resolveByPath` 再以 workspaceId 创建）；宿主契约检查增至 22 项。
 - `0.3.0`：新增 `session_create`（cwd/workspaceId、标题、provider/model/reasoningEffort）和 `workspace_create`（建目录、注册、改名）；模型/强度在创建前校验；补齐离线测试与真实桌面验证。
 - `0.2.0`：移除目标白名单；支持本机路径、`file://`、http(s) URL 附件；图片流式上传 + 普通文件 receipt；目标模型不支持图片时自动降级；新增 `allowFileRoots` / `allowPrivateUrls`；移除插件级附件/文本上限。
 - `0.1.0`：首个版本。`session_send` + 精确白名单 + `queue`/`steer` + 离线测试 + 宿主契约检查。

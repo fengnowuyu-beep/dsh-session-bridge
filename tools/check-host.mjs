@@ -104,6 +104,16 @@ const workspaceVersion = workspacePackageEntry === undefined
   ? '未知'
   : JSON.parse(readEntry(archive, workspacePackageEntry, archiveInfo.dataOffset)).version
 
+const REGISTRY_PREFIX = 'dsh/node_modules/@deepseek-ai/dsh-workspace'
+const registryEntry = findEntry(archiveInfo.header, `${REGISTRY_PREFIX}/lib/index.js`)
+const registryPackageEntry = findEntry(archiveInfo.header, `${REGISTRY_PREFIX}/package.json`)
+const registrySource = registryEntry === undefined
+  ? ''
+  : readEntry(archive, registryEntry, archiveInfo.dataOffset)
+const registryVersion = registryPackageEntry === undefined
+  ? '未知'
+  : JSON.parse(readEntry(archive, registryPackageEntry, archiveInfo.dataOffset)).version
+
 const checks = [
   { source, label: '服务名 sessionController', pattern: /super\(ctx, ["']sessionController["']/u },
   { source, label: 'prompt(request, signal) 对外入口', pattern: /async prompt\(request, signal\)\s*\{/u },
@@ -124,13 +134,16 @@ const checks = [
   { source: workspaceSource, label: '服务名 workspaceController', pattern: /super\(ctx, ["']workspaceController["']/u },
   { source: workspaceSource, label: 'workspaceController.create(request)', pattern: /create\(request\)\s*\{\s*return this\.commands\.create\(request\)/u },
   { source: workspaceSource, label: 'workspaceController.rename(request)', pattern: /rename\(request\)\s*\{\s*return this\.commands\.rename\(request\)/u },
-  { source: workspaceSource, label: 'registry.create(request.path)', pattern: /workspaceRegistry\.create\(request\.path\)/u }
+  { source: workspaceSource, label: 'registry.create(request.path)', pattern: /workspaceRegistry\.create\(request\.path\)/u },
+  { source: registrySource, label: 'workspaceRegistry.resolveByPath(path)', pattern: /async resolveByPath\(path\)\s*\{/u },
+  { source: registrySource, label: 'Workspace.attachSession(sessionId)', pattern: /async attachSession\(sessionId\)\s*\{/u }
 ]
 
 process.stdout.write(`app.asar: ${archive}\n`)
 process.stdout.write(`会话控制器版本: ${version}\n`)
 process.stdout.write(`文件上传服务版本: ${uploadVersion}\n`)
 process.stdout.write(`工作区控制器版本: ${workspaceVersion}\n`)
+process.stdout.write(`工作区注册表版本: ${registryVersion}\n`)
 let failed = 0
 for (const check of checks) {
   if (check.pattern.test(check.source)) {

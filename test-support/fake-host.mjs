@@ -151,13 +151,30 @@ export function createFakeWorkspaceController() {
 }
 
 /**
+ * Build a fake workspace registry that resolves exact paths to workspace ids.
+ * @param byPath - map of absolute path to `{ id, path }`.
+ * @returns `{ resolveByPath }`.
+ */
+export function createFakeWorkspaceRegistry(byPath = {}) {
+  return {
+    async resolveByPath(path) {
+      const entry = byPath[path]
+      if (entry === undefined) return undefined
+      return { id: entry.id, path: entry.path ?? path }
+    }
+  }
+}
+
+/**
  * Mount the plugin against a fake host.
  * @param options - `{ config, controller, promptResult, promptError,
  *   promptErrors, createError, selectError, renameError, catalog,
  *   omitSessionController, omitTools, omitFileUploads, omitWorkspaceController,
- *   fileUploads, workspaceController, fetchImpl }`.
+ *   omitWorkspaceRegistry, fileUploads, workspaceController, workspaceRegistry,
+ *   workspacesByPath, fetchImpl }`.
  * @returns `{ ctx, registered, tools, prompts, logs, tool, uploads,
- *   fetchCalls, controller, created, selections, renames, workspaces }`.
+ *   fetchCalls, controller, created, selections, renames, workspaces,
+ *   workspaceRegistry }`.
  */
 export function createFakeHost(options = {}) {
   const registered = []
@@ -177,6 +194,8 @@ export function createFakeHost(options = {}) {
   const workspaceController = options.workspaceController ?? createdWorkspace.workspaceController
   const workspaces = createdWorkspace?.workspaces ?? []
   const workspaceRenames = createdWorkspace?.renames ?? []
+  const workspaceRegistry = options.workspaceRegistry
+    ?? createFakeWorkspaceRegistry(options.workspacesByPath ?? {})
 
   const fetchCalls = []
   const fetchImpl = options.fetchImpl ?? (async (url) => {
@@ -200,6 +219,7 @@ export function createFakeHost(options = {}) {
     ...options.omitSessionController === true ? {} : { sessionController: controller },
     ...options.omitFileUploads === true ? {} : { fileUploads },
     ...options.omitWorkspaceController === true ? {} : { workspaceController },
+    ...options.omitWorkspaceRegistry === true ? {} : { workspaceRegistry },
     fetch: fetchImpl
   }
   apply(ctx, options.config)
@@ -218,7 +238,8 @@ export function createFakeHost(options = {}) {
     selections,
     renames: sessionRenames,
     workspaces,
-    workspaceRenames
+    workspaceRenames,
+    workspaceRegistry
   }
 }
 
